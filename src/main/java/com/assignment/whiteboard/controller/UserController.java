@@ -1,25 +1,21 @@
 package com.assignment.whiteboard.controller;
 
 import com.assignment.whiteboard.dto.*;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.simp.user.SimpUserRegistry;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
-import java.awt.*;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,13 +53,16 @@ public class UserController {
         }
     }
 
-    @GetMapping("/getData")
-    public ResponseEntity<String> get(@RequestBody String username) {
-        if (adminName == null || adminName.equals(username)) {
-            adminName = username;
-            return ResponseEntity.ok("Admin username has been set successfully.");
+    @GetMapping("/getData/{username}")
+    public ResponseEntity<DataDTO> getData(@PathVariable String username) {
+        if (usernames.contains(username) || adminName.equals(username)) {
+            DataDTO data = new DataDTO();
+            data.setShapeList(shapeList);
+            data.setTextList(textList);
+            data.setLineList(lineList);
+            return ResponseEntity.ok(data);
         } else {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Admin username has already been set!");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
         }
     }
 
@@ -74,7 +73,7 @@ public class UserController {
 
         ApiResponse<Map<String, String>> joinResponse = new ApiResponse<>();
 
-        Map responseData = new HashMap();
+        Map <String, String> responseData = new HashMap<>();
         responseData.put("username", username);
         responseData.put("sessionId", sessionId);
         joinResponse.setData(responseData);
@@ -101,37 +100,24 @@ public class UserController {
         simpMessagingTemplate.convertAndSend(VALIDATE_USER_PATH, joinResponse);
     }
 
-//    @MessageMapping("/addShape")
-//    public void addShape(ApiRequest<ShapeDTO> addShapeRequest) {
-//        String shapeType = addShapeRequest.getMessage();
-//        switch (shapeType) {
-//            case "Rectangle":
-//
-//        }
-//        usernames.add(username);
-//        simpMessagingTemplate.convertAndSendToUser(sessionId, "/queue/validate-users", joinResponse);
-//    }
 
     @MessageMapping("/addShape")
     @SendTo("/topic/shape")
-    public ShapeDTO addShape(ApiRequest<ShapeDTO> apiRequest) {
-        ShapeDTO shapeDTO = apiRequest.getData();
+    public ShapeDTO addShape(ShapeDTO shapeDTO) {
         shapeList.add(shapeDTO);
         return shapeDTO;
     }
 
     @MessageMapping("/addLine")
     @SendTo("/topic/line")
-    public LineDTO addLine(ApiRequest<LineDTO> apiRequest) {
-        LineDTO lineDTO = apiRequest.getData();
+    public LineDTO addLine(LineDTO lineDTO) {
         lineList.add(lineDTO);
         return lineDTO;
     }
 
     @MessageMapping("/addText")
     @SendTo("/topic/text")
-    public TextDTO addText(ApiRequest<TextDTO> apiRequest) {
-        TextDTO textDTO = apiRequest.getData();
+    public TextDTO addText(TextDTO textDTO) {
         textList.add(textDTO);
         return textDTO;
     }
@@ -141,6 +127,10 @@ public class UserController {
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
         String sessionId = event.getSessionId();
         String username = sessionIdToUsername.get(sessionId);
+        if (username == null) {
+            System.out.println("Session is not recorded");
+            return;
+        }
         if (username.equals(adminName)) {
             adminName = null; // Admin has left, we need to kick out all the users
             // TODO: Implement kickout function
