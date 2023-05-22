@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ApiRequest <T> {
+    private String sourceUsername;
     private T data;
     private String message;
 }

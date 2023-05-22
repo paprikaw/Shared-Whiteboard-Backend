@@ -11,4 +11,6 @@ public class DataDTO {
     private List<ShapeDTO> shapeList;
     private List<TextDTO> textList;
     private List<LineDTO> lineList;
+    private List<UsernameDTO> usernameList;
+    private List<ChatMsgDTO> chatMsgList;
 }

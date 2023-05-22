@@ -34,8 +34,8 @@ public class UserController {
     private List<ShapeDTO> shapeList = new LinkedList<>();
     private List<TextDTO> textList  = new LinkedList<>();;
     private List<LineDTO> lineList  = new LinkedList<>();;
+    private List<ChatMsgDTO> chatList  = new LinkedList<>();;
     private SimpUserRegistry userRegistry;
-
 
     @Autowired
     public UserController(SimpMessagingTemplate simpMessagingTemplate, SimpUserRegistry userRegistry) {
@@ -46,6 +46,7 @@ public class UserController {
     @PostMapping("/setAdmin")
     public ResponseEntity<String> setAdmin(@RequestBody String username) {
         if (adminName == null || adminName.equals(username)) {
+            usernames.add(username);
             adminName = username;
             return ResponseEntity.ok("Admin username has been set successfully.");
         } else {
@@ -53,39 +54,68 @@ public class UserController {
         }
     }
 
+    @GetMapping("/validateUser/{username}")
+    public ResponseEntity<ApiResponse<Void>> validateUser(@PathVariable String username) {
+        ApiResponse<Void> response = new ApiResponse<>();
+        if (usernames.contains(username) || adminName.equals(username)) {
+            response.setSuccess(false);
+            return ResponseEntity.ok(response);
+        } else {
+            response.setSuccess(true);
+            return ResponseEntity.ok(response);
+        }
+    }
+
     @GetMapping("/getData/{username}")
     public ResponseEntity<DataDTO> getData(@PathVariable String username) {
         if (usernames.contains(username) || adminName.equals(username)) {
+            List<UsernameDTO> usernameDTOS = new ArrayList<>();
+            for (String cur_username : usernames) {
+                UsernameDTO cur_usernameDto = new UsernameDTO();
+                cur_usernameDto.setName(cur_username);
+                usernameDTOS.add(cur_usernameDto);
+            }
             DataDTO data = new DataDTO();
             data.setShapeList(shapeList);
             data.setTextList(textList);
             data.setLineList(lineList);
+            data.setUsernameList(usernameDTOS);
+            data.setChatMsgList(chatList);
             return ResponseEntity.ok(data);
         } else {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
         }
     }
 
+    @PostMapping("/removeUser/{username}")
+    public ResponseEntity<String> deleteUser(@PathVariable String username) {
+        if (this.adminName != null && (!this.adminName.equals(username))) {
+            if (usernames.contains(username)) {
+                usernames.remove(username);
+                UsernameDTO usernameDTO = new UsernameDTO();
+                usernameDTO.setName(username);
+                simpMessagingTemplate.convertAndSend("/topic/remove-user", usernameDTO);
+                return ResponseEntity.ok("User " + username + " has been deleted successfully.");
+            } else {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("User " + username + " does not exist.");
+            }
+        } else {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You cannot kick out yourself");
+        }
+    }
+
+    // We assume the user which  can subscribe to these topics are all authenticated users
     @MessageMapping("/join")
     public void join(UsernameDTO usernameDTO,  SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();
         String username = usernameDTO.getName();
-
+        sessionIdToUsername.put(sessionId, username);
         ApiResponse<Map<String, String>> joinResponse = new ApiResponse<>();
-
         Map <String, String> responseData = new HashMap<>();
         responseData.put("username", username);
         responseData.put("sessionId", sessionId);
         joinResponse.setData(responseData);
-        sessionIdToUsername.put(sessionId, username);
-
-        if(usernames.contains(username)) {
-            // If username occur, should not push forward to admin, directly notiry the
-            joinResponse.setSuccess(false);
-            simpMessagingTemplate.convertAndSendToUser(sessionId, VALIDATE_USER_PATH, joinResponse);
-        } else {
-            simpMessagingTemplate.convertAndSend("/topic/admin/join-request", joinResponse);
-        }
+        simpMessagingTemplate.convertAndSend("/topic/admin/join-request", joinResponse);
     }
 
     @MessageMapping("/join-response")
@@ -95,6 +125,10 @@ public class UserController {
         if (joinResponse.getSuccess()) {
             username = sessionIdToUsername.get(sessionId);
             usernames.add(username);
+            // If user is in the user list, update user list
+            UsernameDTO usernameDTO = new UsernameDTO();
+            usernameDTO.setName(username);
+            simpMessagingTemplate.convertAndSend("/topic/add-user", usernameDTO);
         }
         joinResponse.setData(username);
         simpMessagingTemplate.convertAndSend(VALIDATE_USER_PATH, joinResponse);
@@ -122,6 +156,13 @@ public class UserController {
         return textDTO;
     }
 
+    @MessageMapping("/addChat")
+    @SendTo("/topic/add-chat")
+    public ChatMsgDTO addChat(ChatMsgDTO chatMsgDTO) {
+        chatList.add(chatMsgDTO);
+        return chatMsgDTO;
+    }
+
     // Event listener to handle websocket connections
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
@@ -131,13 +172,21 @@ public class UserController {
             System.out.println("Session is not recorded");
             return;
         }
+
         if (username.equals(adminName)) {
             adminName = null; // Admin has left, we need to kick out all the users
-            // TODO: Implement kickout function
+            usernames.remove(username);
+            // remove all the users
+            // simpMessagingTemplate.convertAndSend("/topic/app-closed", new ApiResponse<>());
+            // System.out.println("Admin close the app\n");
         } else {
             if (usernames.contains(username)) {
                 usernames.remove(username);
             }
+            // If user is in the user list, remove user from the user list
+            UsernameDTO usernameDTO = new UsernameDTO();
+            usernameDTO.setName(username);
+            simpMessagingTemplate.convertAndSend("/topic/remove-user", usernameDTO);
             sessionIdToUsername.remove(sessionId);
         }
         System.out.println("WebSocket connection closed with session id: " + sessionId + ", user name: " + username);
