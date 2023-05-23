@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
-import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,21 +25,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class UserController {
     private final SimpMessagingTemplate simpMessagingTemplate;
     private Map<String, String> sessionIdToUsername = new ConcurrentHashMap<>(); // Using when web connection is closed
-     private SimpUserRegistry userRegistry;
     private String cur_filename = "default.json";
     private WhiteBoardData whiteBoardData = new WhiteBoardData(cur_filename);
-    private final static String fileDirectory = "./files/";
 
     @Autowired
     public UserController(SimpMessagingTemplate simpMessagingTemplate, SimpUserRegistry userRegistry) {
         this.simpMessagingTemplate = simpMessagingTemplate;
-        this.userRegistry = userRegistry;
     }
 
     @PostMapping("/setAdmin")
     public ResponseEntity<String> setAdmin(@RequestBody String username) {
-        String adminName = whiteBoardData.getAdminName();
-        if (adminName == null || adminName.equals(username)) {
+        if (whiteBoardData.getAdminName() == null) {
             whiteBoardData.setAdminName(username);
             return ResponseEntity.ok("Admin username has been set successfully.");
         } else {
@@ -52,7 +47,7 @@ public class UserController {
     public ResponseEntity<ApiResponse<Void>> validateUser(@PathVariable String username) {
         ApiResponse<Void> response = new ApiResponse<>();
         Boolean isContained = whiteBoardData.containsAnd(username, unused -> {});
-        if (isContained)  {
+        if (isContained) {
             response.setSuccess(false);
         } else {
             response.setSuccess(true);
@@ -89,7 +84,6 @@ public class UserController {
     }
 
     // Create a new whiteboard, clear all current shape, line, text data, using rest
-    // TODO: Only admin can close the application
     @PostMapping("/createWhiteboard")
     public ResponseEntity<String> createWhiteboard() {
         String adminName = whiteBoardData.getAdminName();
@@ -104,7 +98,7 @@ public class UserController {
 
     // Upload data of whiteboard, including text, line and shape, save to a file
     @PostMapping("/saveData")
-    public ResponseEntity<String> uploadData(@RequestParam(value="filename", required = false) String filename) {
+    public ResponseEntity<String> uploadData(@RequestParam(value = "filename", required = false) String filename) {
         String adminName = whiteBoardData.getAdminName();
         if (adminName != null) {
             if (filename != null) {
@@ -117,7 +111,7 @@ public class UserController {
         }
     }
 
-    // Load data from a localfile, post request
+    // Load data from a local file, post request
     @PostMapping("/loadData/{filename}")
     public ResponseEntity<String> loadData(@PathVariable String filename) {
         String adminName = whiteBoardData.getAdminName();
@@ -143,16 +137,15 @@ public class UserController {
     }
 
     // Close the application, send an message to a /topic/close to all users
-    // TODO: Only admin can close the application
     @PostMapping("/closeApp")
     public ResponseEntity<String> close() {
         String adminName = whiteBoardData.getAdminName();
         if (adminName != null) {
 
-            ApiResponse<String> apiResponse= new ApiResponse<>();
+            ApiResponse<String> apiResponse = new ApiResponse<>();
             apiResponse.setSuccess(true);
             simpMessagingTemplate.convertAndSend(URI.CLOSE_APP_PATH, apiResponse);
-            adminName = null;
+            whiteBoardData.setAdminName(null);
             return ResponseEntity.ok("Close request has been sent successfully.");
         } else {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Admin username has not been set yet.");
@@ -160,13 +153,25 @@ public class UserController {
     }
 
     // We assume the user which  can subscribe to these topics are all authenticated users
+    @MessageMapping("/adminJoin")
+    public void AdminJoin(UsernameDTO usernameDTO, SimpMessageHeaderAccessor headerAccessor) {
+        String sessionId = headerAccessor.getSessionId();
+        String username = usernameDTO.getName();
+        sessionIdToUsername.put(sessionId, username);
+        ApiResponse<String> response = new ApiResponse<>();
+        response.setData(username);
+        response.setSuccess(true);
+        simpMessagingTemplate.convertAndSend("/topic/admin/init", response);
+    }
+
+    // We assume the user which  can subscribe to these topics are all authenticated users
     @MessageMapping("/join")
-    public void join(UsernameDTO usernameDTO,  SimpMessageHeaderAccessor headerAccessor) {
+    public void join(UsernameDTO usernameDTO, SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();
         String username = usernameDTO.getName();
         sessionIdToUsername.put(sessionId, username);
         ApiResponse<Map<String, String>> joinResponse = new ApiResponse<>();
-        Map <String, String> responseData = new HashMap<>();
+        Map<String, String> responseData = new HashMap<>();
         responseData.put("username", username);
         responseData.put("sessionId", sessionId);
         joinResponse.setData(responseData);
@@ -230,9 +235,9 @@ public class UserController {
         }
 
         if (username.equals(adminName)) {
-            // TODO: what will happended when admin quit?
             simpMessagingTemplate.convertAndSend(URI.CLOSE_APP_PATH, "close");
-
+            whiteBoardData.setAdminName(null);
+            whiteBoardData.containsAndDelete(username);
         } else {
             whiteBoardData.containsAndDelete(username);
             // If user is in the user list, remove user from the user list
@@ -251,15 +256,4 @@ public class UserController {
         String destination = headers.getDestination();
         System.out.println("WebSocket subscription to " + destination + " with session id: " + sessionId);
     }
-
-    // Helper function
-//    private DataDTO getDataDTO() {
-//    List<UsernameDTO> usernameDTOS = new ArrayList<>();
-//    for (String cur_username : whiteBoardData.getUsernames()) {
-//        UsernameDTO cur_usernameDto = new UsernameDTO();
-//        cur_usernameDto.setName(cur_username);
-//        usernameDTOS.add(cur_usernameDto);
-//    }
-//    return whiteBoardData.getDataDTO();
-//}
- }
+}

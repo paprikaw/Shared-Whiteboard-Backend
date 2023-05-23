@@ -3,7 +3,6 @@ package com.assignment.whiteboard.model;
 import com.assignment.whiteboard.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
-import org.springframework.http.ResponseEntity;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,6 +27,15 @@ public class WhiteBoardData {
                 directory.mkdirs();
             }
             loadFromFile(filename);
+        }
+    }
+
+    // Clear all data in the object
+    public void clearAll() {
+        synchronized(this) {
+            this.shapeList.clear();
+            this.lineList.clear();
+            this.textList.clear();
         }
     }
 
@@ -71,12 +79,11 @@ public class WhiteBoardData {
         return dataDTO;
     }
 
+    /* Methods to check the existence of a username */
     public boolean contains(String username) {
         return usernames.contains(username);
     }
-
-    // Atomic operation to make sure that user can check
-    // whether username is in the user list and perform an operation atomically
+    // Check existence of a username and delete the username atomatically
     public boolean containsAndDelete(String username) {
         Boolean isContained;
         synchronized(this) {
@@ -87,8 +94,8 @@ public class WhiteBoardData {
         }
         return isContained;
     }
-
-    // Note: You should not try to acquire lock in this function, it will incur a dead lock
+    // Note: You should not try to acquire lock of this object in this function, it will incur a dead lock
+    // Check whether the username is in the list, and perform a function. This is atomic
     public boolean containsAnd(String username, Consumer<Void> callback) {
         Boolean isContained;
         synchronized(this) {
@@ -114,12 +121,7 @@ public class WhiteBoardData {
         }
     }
 
-    public void removeUsername(String username) {
-        synchronized (this) {
-            usernames.remove(username);
-        }
-    }
-
+    /* File methods */
     public void saveToFile(String filename) {
         synchronized(this) {
             ObjectMapper mapper = new ObjectMapper();
@@ -135,7 +137,6 @@ public class WhiteBoardData {
             }
         }
     }
-
     public void loadFromFile(String filename) {
         synchronized(this) {
             ObjectMapper mapper = new ObjectMapper();
@@ -155,7 +156,6 @@ public class WhiteBoardData {
             }
         }
     }
-
     private String getFullPathName (String file) {
        return getFileDirectory() + "/"  + file;
     }
@@ -164,11 +164,5 @@ public class WhiteBoardData {
         String[] files = directory.list();
         return files != null ? Arrays.asList(files) : new ArrayList<>();
     }
-    public void clearAll() {
-        synchronized(this) {
-            this.shapeList.clear();
-            this.lineList.clear();
-            this.textList.clear();
-        }
-    }
+
 }
