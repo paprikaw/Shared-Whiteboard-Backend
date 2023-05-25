@@ -114,7 +114,6 @@ public class WhiteBoardData {
         }
     }
 
-    // Implement set remove method
     public void addUsername(String username) {
         synchronized (this) {
             usernames.add(username);

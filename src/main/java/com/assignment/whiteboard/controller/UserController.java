@@ -25,8 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class UserController {
     private final SimpMessagingTemplate simpMessagingTemplate;
     private Map<String, String> sessionIdToUsername = new ConcurrentHashMap<>(); // Using when web connection is closed
-    private String cur_filename = "default.json";
-    private WhiteBoardData whiteBoardData = new WhiteBoardData(cur_filename);
+    private String default_file = "default.json";
+    private WhiteBoardData whiteBoardData = new WhiteBoardData(default_file);
 
     @Autowired
     public UserController(SimpMessagingTemplate simpMessagingTemplate, SimpUserRegistry userRegistry) {
@@ -49,6 +49,10 @@ public class UserController {
         Boolean isContained = whiteBoardData.containsAnd(username, unused -> {});
         if (isContained) {
             response.setSuccess(false);
+            response.setError("username is already exists");
+        } else if ( whiteBoardData.getAdminName() == null) {
+            response.setSuccess(false);
+            response.setError("admin has not create a whiteboard");
         } else {
             response.setSuccess(true);
         }
@@ -102,9 +106,10 @@ public class UserController {
         String adminName = whiteBoardData.getAdminName();
         if (adminName != null) {
             if (filename != null) {
-                cur_filename = filename;
+                whiteBoardData.saveToFile(filename);
+            } else {
+                whiteBoardData.saveToFile(default_file);
             }
-            whiteBoardData.saveToFile(cur_filename);
             return ResponseEntity.ok("Data has been saved successfully.");
         } else {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Admin username has not been set yet.");
@@ -116,8 +121,7 @@ public class UserController {
     public ResponseEntity<String> loadData(@PathVariable String filename) {
         String adminName = whiteBoardData.getAdminName();
         if (adminName != null) {
-            cur_filename = filename;
-            whiteBoardData.loadFromFile(cur_filename);
+            whiteBoardData.loadFromFile(filename);
             simpMessagingTemplate.convertAndSend(URI.UPDATE_DATA, whiteBoardData.getDataDTO());
             return ResponseEntity.ok("Data has been loaded successfully.");
         } else {

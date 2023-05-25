@@ -1,1 +1,1 @@
-{"textList":[],"lineList":[{"x1":80,"y1":14,"x2":246,"y2":111,"r":0,"g":0,"b":0}],"shapeList":[{"type":"Rectangle","x":233,"y":116,"width":267,"height":-61,"r":0,"g":0,"b":0}]}
+{"textList":[{"x":510,"y":245,"text":"asdf","r":0,"g":0,"b":0,"font_size":12}],"lineList":[{"x1":80,"y1":14,"x2":246,"y2":111,"r":0,"g":0,"b":0}],"shapeList":[{"type":"Rectangle","x":233,"y":116,"width":267,"height":-61,"r":0,"g":0,"b":0},{"type":"Rectangle","x":224,"y":347,"width":138,"height":-126,"r":0,"g":0,"b":0},{"type":"Oval","x":349,"y":126,"width":115,"height":96,"r":0,"g":0,"b":0}]}
